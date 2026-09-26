@@ -88,7 +88,7 @@
         let tg = window.Telegram.WebApp;
         tg.expand();
 
-        // Укажи адрес своего запущенного сервера (например, через ngrok или реальный сервер)
+        // ⚠️ ВСТАВЬ СЮДА СВОЮ АКТУАЛЬНУЮ ССЫЛКУ ИЗ NGROK (без слэша на конце)
         const SERVER_URL = "https://freeness-designate-entire.ngrok-free.dev";
 
         let myName = "";
@@ -109,17 +109,25 @@
                 return;
             }
 
-            let response = await fetch(SERVER_URL + "/api/create_room", {
-                method: "POST",
-                headers: {"Content-Type": "application/json"},
-                body: JSON.stringify({ room_code: roomCode, player_name: myName, girls: girlsList })
-            });
-            let data = await response.json();
-            
-            if(data.status === "ok") {
-                buildVotingForm(data.room.girls);
-                document.getElementById('screen-setup').style.display = 'none';
-                document.getElementById('screen-voting').style.display = 'block';
+            try {
+                let response = await fetch(SERVER_URL + "/api/create_room", {
+                    method: "POST",
+                    headers: {"Content-Type": "application/json"},
+                    body: JSON.stringify({ room_code: roomCode, player_name: myName, girls: girlsList })
+                });
+                
+                let data = await response.json();
+                
+                if(data.status === "ok") {
+                    buildVotingForm(data.room.girls);
+                    document.getElementById('screen-setup').style.display = 'none';
+                    document.getElementById('screen-voting').style.display = 'block';
+                } else {
+                    alert("Ошибка от сервера: " + JSON.stringify(data));
+                }
+            } catch (error) {
+                alert("Не удалось подключиться к серверу! Проверь, запущен ли server.py и ngrok. Ошибка: " + error);
+                console.error(error);
             }
         }
 
@@ -167,35 +175,43 @@
                 };
             });
 
-            await fetch(SERVER_URL + "/api/vote", {
-                method: "POST",
-                headers: {"Content-Type": "application/json"},
-                body: JSON.stringify({ room_code: roomCode, player_name: myName, votes: votes })
-            });
+            try {
+                await fetch(SERVER_URL + "/api/vote", {
+                    method: "POST",
+                    headers: {"Content-Type": "application/json"},
+                    body: JSON.stringify({ room_code: roomCode, player_name: myName, votes: votes })
+                });
 
-            document.getElementById('screen-voting').style.display = 'none';
-            document.getElementById('screen-waiting').style.display = 'block';
+                document.getElementById('screen-voting').style.display = 'none';
+                document.getElementById('screen-waiting').style.display = 'block';
+            } catch (error) {
+                alert("Ошибка отправки голосов: " + error);
+            }
         }
 
         async function checkResults() {
-            let response = await fetch(SERVER_URL + "/api/get_results", {
-                method: "POST",
-                headers: {"Content-Type": "application/json"},
-                body: JSON.stringify({ room_code: roomCode })
-            });
-            let data = await response.json();
-
-            if (data.status === "finished") {
-                let box = document.getElementById('results-box');
-                box.innerHTML = "";
-                data.results.forEach((res, idx) => {
-                    let medal = idx === 0 ? "🥇 1 место" : idx === 1 ? "🥈 2 место" : "🥉 3 место";
-                    box.innerHTML += `<p><strong>${medal}:</strong> ${res.name} — ${res.score} баллов</p>`;
+            try {
+                let response = await fetch(SERVER_URL + "/api/get_results", {
+                    method: "POST",
+                    headers: {"Content-Type": "application/json"},
+                    body: JSON.stringify({ room_code: roomCode })
                 });
-                document.getElementById('screen-waiting').style.display = 'none';
-                document.getElementById('screen-results').style.display = 'block';
-            } else {
-                alert(`Еще не все проголосовали! Проголосовало: ${data.players_voted} / ${data.total_players}`);
+                let data = await response.json();
+
+                if (data.status === "finished") {
+                    let box = document.getElementById('results-box');
+                    box.innerHTML = "";
+                    data.results.forEach((res, idx) => {
+                        let medal = idx === 0 ? "🥇 1 место" : idx === 1 ? "🥈 2 место" : "🥉 3 место";
+                        box.innerHTML += `<p><strong>${medal}:</strong> ${res.name} — ${res.score} баллов</p>`;
+                    });
+                    document.getElementById('screen-waiting').style.display = 'none';
+                    document.getElementById('screen-results').style.display = 'block';
+                } else {
+                    alert(`Еще не все проголосовали! Проголосовало: ${data.players_voted} / ${data.total_players}`);
+                }
+            } catch (error) {
+                alert("Ошибка получения результатов: " + error);
             }
         }
     </script>
