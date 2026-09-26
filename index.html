@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Анонимный Баттл 👑</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <style>
+        body {
+            background-color: var(--tg-theme-bg-color, #18222d);
+            color: var(--tg-theme-text-color, #ffffff);
+            font-family: Arial, sans-serif;
+            text-align: center;
+            margin: 0;
+            padding: 20px;
+        }
+        .card {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 16px;
+            padding: 20px;
+            margin-bottom: 15px;
+            text-align: left;
+        }
+        input, select {
+            width: 100%;
+            padding: 12px;
+            margin: 8px 0;
+            border-radius: 8px;
+            border: none;
+            background: rgba(255,255,255,0.2);
+            color: white;
+            font-size: 16px;
+            box-sizing: border-box;
+        }
+        .btn {
+            background-color: var(--tg-theme-button-color, #2481cc);
+            color: var(--tg-theme-button-text-color, #ffffff);
+            border: none;
+            padding: 15px;
+            width: 100%;
+            font-size: 16px;
+            border-radius: 10px;
+            cursor: pointer;
+            font-weight: bold;
+            margin-top: 10px;
+        }
+        .criteria-box { margin-bottom: 15px; }
+        .criteria-box label { display: block; font-size: 14px; margin-bottom: 5px; color: #aaa; }
+    </style>
+</head>
+<body>
+
+    <div id="screen-setup">
+        <h2>👑 Создание комнаты</h2>
+        <div class="card">
+            <label>Твое имя:</label>
+            <input type="text" id="p-name" placeholder="Например: Иван">
+            
+            <label>Код комнаты (скажи друзьям):</label>
+            <input type="text" id="r-code" placeholder="Например: 777">
+            
+            <h3 style="margin-top:15px;">Впиши 3 девушек для оценки:</h3>
+            <input type="text" id="g-1" placeholder="Девушка 1 (Имя)">
+            <input type="text" id="g-2" placeholder="Девушка 2 (Имя)">
+            <input type="text" id="g-3" placeholder="Девушка 3 (Имя)">
+        </div>
+        <button class="btn" onclick="startRoom()">Войти в комнату</button>
+    </div>
+
+    <div id="screen-voting" style="display:none;">
+        <h2>📝 Анонимное голосование</h2>
+        <div id="voting-container"></div>
+        <button class="btn" onclick="submitVotes()">Отправить голоса</button>
+    </div>
+
+    <div id="screen-waiting" style="display:none;">
+        <h2>⏳ Ожидание игроков...</h2>
+        <p>Голоса приняты. Ждем, пока остальные закончат оценку.</p>
+        <button class="btn" onclick="checkResults()">Обновить результаты</button>
+    </div>
+
+    <div id="screen-results" style="display:none;">
+        <h2>🏆 Итоги баттла</h2>
+        <div class="card" id="results-box"></div>
+    </div>
+
+    <script>
+        let tg = window.Telegram.WebApp;
+        tg.expand();
+
+        // Укажи адрес своего запущенного сервера (например, через ngrok или реальный сервер)
+        const SERVER_URL = "https://freeness-designate-entire.ngrok-free.dev";
+
+        let myName = "";
+        let roomCode = "";
+        let girlsList = [];
+
+        async function startRoom() {
+            myName = document.getElementById('p-name').value;
+            roomCode = document.getElementById('r-code').value;
+            girlsList = [
+                document.getElementById('g-1').value,
+                document.getElementById('g-2').value,
+                document.getElementById('g-3').value
+            ];
+
+            if(!myName || !roomCode || !girlsList[0]) {
+                alert("Заполни все поля!");
+                return;
+            }
+
+            let response = await fetch(SERVER_URL + "/api/create_room", {
+                method: "POST",
+                headers: {"Content-Type": "application/json"},
+                body: JSON.stringify({ room_code: roomCode, player_name: myName, girls: girlsList })
+            });
+            let data = await response.json();
+            
+            if(data.status === "ok") {
+                buildVotingForm(data.room.girls);
+                document.getElementById('screen-setup').style.display = 'none';
+                document.getElementById('screen-voting').style.display = 'block';
+            }
+        }
+
+        function buildVotingForm(girls) {
+            let container = document.getElementById('voting-container');
+            container.innerHTML = "";
+
+            girls.forEach((gName, gIdx) => {
+                let html = `<div class="card">
+                    <h3>🌸 ${gName}</h3>
+                    <div class="criteria-box">
+                        <label>1. Лицо (1-10):</label>
+                        <select id="v-${gIdx}-1"><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option><option>6</option><option>7</option><option>8</option><option>9</option><option selected>10</option></select>
+                    </div>
+                    <div class="criteria-box">
+                        <label>2. Грудь (1-10):</label>
+                        <select id="v-${gIdx}-2"><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option><option>6</option><option>7</option><option>8</option><option>9</option><option selected>10</option></select>
+                    </div>
+                    <div class="criteria-box">
+                        <label>3. Ягодицы (1-10):</label>
+                        <select id="v-${gIdx}-3"><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option><option>6</option><option>7</option><option>8</option><option>9</option><option selected>10</option></select>
+                    </div>
+                    <div class="criteria-box">
+                        <label>4. Характер (1-10):</label>
+                        <select id="v-${gIdx}-4"><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option><option>6</option><option>7</option><option>8</option><option>9</option><option selected>10</option></select>
+                    </div>
+                    <div class="criteria-box">
+                        <label>5. Дающая (0 или 10):</label>
+                        <select id="v-${gIdx}-5"><option value="0">Нет (0)</option><option value="10" selected>Да (10)</option></select>
+                    </div>
+                </div>`;
+                container.innerHTML += html;
+            });
+        }
+
+        async function submitVotes() {
+            let votes = {};
+            girlsList.forEach((_, gIdx) => {
+                votes[gIdx] = {
+                    1: document.getElementById(`v-${gIdx}-1`).value,
+                    2: document.getElementById(`v-${gIdx}-2`).value,
+                    3: document.getElementById(`v-${gIdx}-3`).value,
+                    4: document.getElementById(`v-${gIdx}-4`).value,
+                    5: document.getElementById(`v-${gIdx}-5`).value
+                };
+            });
+
+            await fetch(SERVER_URL + "/api/vote", {
+                method: "POST",
+                headers: {"Content-Type": "application/json"},
+                body: JSON.stringify({ room_code: roomCode, player_name: myName, votes: votes })
+            });
+
+            document.getElementById('screen-voting').style.display = 'none';
+            document.getElementById('screen-waiting').style.display = 'block';
+        }
+
+        async function checkResults() {
+            let response = await fetch(SERVER_URL + "/api/get_results", {
+                method: "POST",
+                headers: {"Content-Type": "application/json"},
+                body: JSON.stringify({ room_code: roomCode })
+            });
+            let data = await response.json();
+
+            if (data.status === "finished") {
+                let box = document.getElementById('results-box');
+                box.innerHTML = "";
+                data.results.forEach((res, idx) => {
+                    let medal = idx === 0 ? "🥇 1 место" : idx === 1 ? "🥈 2 место" : "🥉 3 место";
+                    box.innerHTML += `<p><strong>${medal}:</strong> ${res.name} — ${res.score} баллов</p>`;
+                });
+                document.getElementById('screen-waiting').style.display = 'none';
+                document.getElementById('screen-results').style.display = 'block';
+            } else {
+                alert(`Еще не все проголосовали! Проголосовало: ${data.players_voted} / ${data.total_players}`);
+            }
+        }
+    </script>
+</body>
+</html>
