@@ -51,20 +51,19 @@
 <body>
 
     <div id="screen-setup">
-        <h2>👑 Создание комнаты</h2>
+        <h2>👑 Вход в комнату</h2>
         <div class="card">
             <label>Твое имя:</label>
             <input type="text" id="p-name" placeholder="Например: Иван">
             
-            <label>Код комнаты (скажи друзьям):</label>
-            <input type="text" id="r-code" placeholder="Например: 777">
-            
-            <h3 style="margin-top:15px;">Впиши 3 девушек для оценки:</h3>
-            <input type="text" id="g-1" placeholder="Девушка 1 (Имя)">
-            <input type="text" id="g-2" placeholder="Девушка 2 (Имя)">
-            <input type="text" id="g-3" placeholder="Девушка 3 (Имя)">
+            <div id="girls-input-box">
+                <h3 style="margin-top:15px;">Впиши 3 девушек для оценки:</h3>
+                <input type="text" id="g-1" placeholder="Девушка 1 (Имя)">
+                <input type="text" id="g-2" placeholder="Девушка 2 (Имя)">
+                <input type="text" id="g-3" placeholder="Девушка 3 (Имя)">
+            </div>
         </div>
-        <button class="btn" onclick="startRoom()">Войти в комнату</button>
+        <button class="btn" onclick="startRoom()">Начать голосование</button>
     </div>
 
     <div id="screen-voting" style="display:none;">
@@ -88,29 +87,38 @@
         let tg = window.Telegram.WebApp;
         tg.expand();
 
-        // ⚠️ ВСТАВЬ СЮДА СВОЮ АКТУАЛЬНУЮ ССЫЛКУ ИЗ NGROK (без слэша на конце)
         const SERVER_URL = "https://freeness-designate-entire.ngrok-free.dev";
 
+        // Читаем код комнаты из параметров ссылки (?room=room_123)
+        const urlParams = new URLSearchParams(window.location.search);
+        const roomCode = urlParams.get('room') || "default_room";
+
         let myName = "";
-        let roomCode = "";
         let girlsList = [];
+
+        // Автозаполнение имени из Телеграма, если доступно
+        if (tg.initDataUnsafe && tg.initDataUnsafe.user) {
+            document.getElementById('p-name').value = tg.initDataUnsafe.user.first_name;
+        }
 
         async function startRoom() {
             myName = document.getElementById('p-name').value;
-            roomCode = document.getElementById('r-code').value;
-            girlsList = [
-                document.getElementById('g-1').value,
-                document.getElementById('g-2').value,
-                document.getElementById('g-3').value
-            ];
+            
+            let g1 = document.getElementById('g-1').value;
+            let g2 = document.getElementById('g-2').value;
+            let g3 = document.getElementById('g-3').value;
 
-            if(!myName || !roomCode || !girlsList[0]) {
-                alert("Заполни все поля!");
+            if(!myName) {
+                alert("Впиши свое имя!");
                 return;
             }
 
+            if(g1) {
+                girlsList = [g1, g2, g3];
+            }
+
             try {
-                let response = await fetch(SERVER_URL + "/api/create_room", {
+                let response = await fetch(SERVER_URL + "/api/get_or_create_room", {
                     method: "POST",
                     headers: {"Content-Type": "application/json"},
                     body: JSON.stringify({ room_code: roomCode, player_name: myName, girls: girlsList })
@@ -123,11 +131,10 @@
                     document.getElementById('screen-setup').style.display = 'none';
                     document.getElementById('screen-voting').style.display = 'block';
                 } else {
-                    alert("Ошибка от сервера: " + JSON.stringify(data));
+                    alert("Ошибка: " + JSON.stringify(data));
                 }
             } catch (error) {
-                alert("Не удалось подключиться к серверу! Проверь, запущен ли server.py и ngrok. Ошибка: " + error);
-                console.error(error);
+                alert("Ошибка соединения с сервером: " + error);
             }
         }
 
@@ -165,17 +172,26 @@
 
         async function submitVotes() {
             let votes = {};
-            girlsList.forEach((_, gIdx) => {
-                votes[gIdx] = {
-                    1: document.getElementById(`v-${gIdx}-1`).value,
-                    2: document.getElementById(`v-${gIdx}-2`).value,
-                    3: document.getElementById(`v-${gIdx}-3`).value,
-                    4: document.getElementById(`v-${gIdx}-4`).value,
-                    5: document.getElementById(`v-${gIdx}-5`).value
-                };
-            });
-
+            // Если список девушек пустой на клиенте, запрашиваем сервер
             try {
+                let response = await fetch(SERVER_URL + "/api/get_or_create_room", {
+                    method: "POST",
+                    headers: {"Content-Type": "application/json"},
+                    body: JSON.stringify({ room_code: roomCode, player_name: myName, girls: [] })
+                });
+                let data = await response.json();
+                let currentGirls = data.room.girls;
+
+                currentGirls.forEach((_, gIdx) => {
+                    votes[gIdx] = {
+                        1: document.getElementById(`v-${gIdx}-1`).value,
+                        2: document.getElementById(`v-${gIdx}-2`).value,
+                        3: document.getElementById(`v-${gIdx}-3`).value,
+                        4: document.getElementById(`v-${gIdx}-4`).value,
+                        5: document.getElementById(`v-${gIdx}-5`).value
+                    };
+                });
+
                 await fetch(SERVER_URL + "/api/vote", {
                     method: "POST",
                     headers: {"Content-Type": "application/json"},
